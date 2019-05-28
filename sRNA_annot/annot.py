@@ -3,7 +3,7 @@
 import gzip
 import os,sys
 import glob
-from database.build_database import database
+from biosoftware import samtools,bowtie2
 from optparse import OptionParser
 from aasra_fq import aasra_fq
 
@@ -53,9 +53,10 @@ def align(database,sample,fastq,shell_dir,annotation_dir):
         shell = ''
         if name == 'sncrna':
             shell = 'python {dir}/{aasra_fq} {fq} {annot_dir}/{sample}.fq.gz'.format(dir=os.getcwd(),aasra_fq=aasra_fq,fq=fastq,annot_dir=annotation_dir,sample=sample)
-            shell += "{bowtie2} {para} {} {}"
-
-
+            shell += "{bowtie2} {para} -x {data}/{name} -U {annot_dir}/{sample}.fq.gz | {samtools} view -bS -o {annot_dir}/{sample}_{name}.bam".format(bowtie2=bowtie2(),para=sncrna_mapping_para,data=data,name=name,annot_dir=annotation_dir,sample=sample,samtools=samtools())
+            shell += 'rm -rf {annot_dir}/{sample}.fq.gz'.format(annot_dir=annotation_dir,sample=sample)
+        elif name == 'Rfam':
+            shell = 'python {dir}/fq2fa.py -i {annot_dir}/{sample}.fq.gz -o {annot_dir}/{sample}.fa'.format(dir=os.getcwd(),annot_dir=annotation_dir,sample=sample)
 
 def Genome_mapping(self,out_bam):
     """ bowtie2 mapping """
@@ -75,18 +76,7 @@ def Genome_unknown(self,unknown_fa):
 
 
 
-def Rfam_fq2fa(self,in_fq,out_fa):
-    """将fq变fa，便于cmsearch进行Rfam注释"""
-    flag=0
-    IN=open(in_fq,'r') if not in_fq.startswith(".gz") else gzip.open(in_fq,'rb')
-    for line in IN.readlines():
-        line = line.strip()
-        if flag == 1:
-            print (line)
-        flag += 1
-        if flag == 4:
-            flag = 0
-    IN.close()
+
 
 def Rfam_cmsearch(self,in_fa,outxls):
     """ 注释 Rfam"""
