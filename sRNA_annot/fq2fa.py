@@ -1,6 +1,7 @@
 #-*-coding:utf-8-*-
 import os
 import sys
+import subprocess
 from optparse import OptionParser
 def main():
 	"""
@@ -19,22 +20,31 @@ def fq2fa(in_fq,out_fa):
 	"""将fq变fa，便于cmsearch进行Rfam注释"""
 	flag=0
 	IN=open(in_fq,'r') if not in_fq.startswith(".gz") else gzip.open(in_fq,'rb')
-	Dict = {}
+	tmp_file = out_fa.replace('.fa','.tmp')
+	TMP=open(tmp_file,'w')
 	for line in IN.readlines():
-		line = line.strip()
 		if flag == 1:
-			if line not in Dict.keys():
-				Dict[line] = 1
-			else:
-				Dict[line] += 1
+			TMP.writelines(line)
 		flag += 1
 		if flag == 4:
 			flag = 0
 	IN.close()
-	line_id = 1
-	with open(out_fa,'w') as OUT:
-		for key in sorted(Dict.keys()):
-			OUT.writelines('>tag%d_%d\n%s\n'%(line_id,Dict[key],key))
+	TMP.close()
+
+	tmp = os.popen("sort --buffer-size=500M --temporary-directory='.' %s" % (tmp_file))
+	OUT=open(out_fa,'w')
+	seq,num,flag = 'na',0,1
+	for line in tmp.readlines():
+		if line != seq:
+			if seq != 'na':
+				OUT.writelines(">tag{flag}_{num}\n{seq}".format(flag=flag,num=num,seq=seq))
+				flag += 1
+			seq,num = line,0
+		num += 1
+	OUT.writelines(">tag{flag}_{num}\n{seq}".format(flag=flag, num=num, seq=seq))
+	tmp.close()
+	OUT.close()
+
 
 
 
