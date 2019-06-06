@@ -46,9 +46,5 @@ def fq2fa(in_fq,out_fa):
 	OUT.close()
 
 
-
-
-
-
 if __name__=="__main__":
 	main()
