@@ -1,6 +1,7 @@
 #-*-coding:utf-8-*-
 import os,re,sys
 import glob
+from collections import defaultdict
 from optparse import OptionParser
 
 
@@ -43,11 +44,12 @@ def DESeq2(indir,diffList,log2,padj,outdir):
 	#GeneID  Uniq_reads_num(42330999)        Length  Coverage        RPKM
 	header = "GeneID"
 	samples2 = []
-	results = {}
+	results = defaultdict()
 	descs = {}
 	len = {}
 	for file in glob.glob(indir+"/*.expr.xls"):
 		keyname = os.path.basename(file).replace('.expr.xls','')
+		print("keyname",keyname)
 		if re.match('^\d+',keyname):
 			keyname = "X"+keyname
 		samples2.append(keyname)
@@ -58,14 +60,12 @@ def DESeq2(indir,diffList,log2,padj,outdir):
 			for line in F.readlines():
 				line = line.strip()
 				tabs = line.split('\t',6)
-				if not results.get(tabs[0]):
-					results[tabs[0]] = {keyname:tabs[1]}
-				if not len.get(tabs[0]):
-					len[tabs[0]] = tabs[2]
-	with open(outdir+"/DESeq.xls") as F:
+				results[tabs[0]][keyname] = tabs[1]
+				len[tabs[0]] = tabs[2]
+	with open(outdir+"/DESeq.xls",'w') as F:
 		F.writelines(header+"\n")
 		for gene in results.keys():
-			F.writelines(gene+"\n")
+			F.writelines(gene+"\t")
 			out = []
 			for sample in samples2:
 				if results[gene].get(sample):
@@ -75,7 +75,6 @@ def DESeq2(indir,diffList,log2,padj,outdir):
 			F.writelines("\t".join(out)+"\n")
 	id = {}
 	xls = {}
-	sample_name = []
 	with open(outdir+"/DESeq.xls",'r') as F:
 		line2 = F.readline().strip()
 		sample_name = line2.split()[1:]
@@ -85,9 +84,10 @@ def DESeq2(indir,diffList,log2,padj,outdir):
 			tmp = line.split()
 			id[gene_num] = tmp[0]
 			gene_num += 1
-			for j in range(len(sample_name)):
+			print("sample_name:",sample_name)
+			for j in range(1):
 				if not xls.get(sample_name[j]):
-					xls[sample_name[j]] = {tmp[0]:tmp[j+1]}
+					xls[sample_name[j]] = {tmp[0]:tmp[1]}
 	groups = {}
 	samples = {}
 	# groupA:A1,A2&groupB:B1,B2;C:c1,c2&D:d1
@@ -98,8 +98,8 @@ def DESeq2(indir,diffList,log2,padj,outdir):
 			one_group = one.split(':')
 			if not groups.get(one_group[0]):
 				groups[one_group[0]] = one_group[0]
-				samples = one_group.split(',')
-				for sample in samples:
+				sampleaa = one_group[1].split(',')
+				for sample in sampleaa:
 					if re.match('^\d+',sample):
 						sample = "X"+sample
 					groups[one_group[0]] = {sample:sample}
@@ -160,7 +160,7 @@ def DESeq2(indir,diffList,log2,padj,outdir):
 		""".format(outdir=outdir,conds=conds,tsp=tsp)
 		OUT.writelines(R_script)
 
-		os.system("Rpath {outdir}/{gan}-vs-{gbn}.DESeq.R".format(outdir=outdir,gan=gan,gbn=gbn))
+		os.system("/ifs4/BC_PUB/biosoft/pipeline/Package/R-3.3.1/bin/Rscript {outdir}/{gan}-vs-{gbn}.DESeq.R".format(outdir=outdir,gan=gan,gbn=gbn))
 		fh_diffexp = open("{outdir}/{gan}-vs-{gbn}_DESeq2.diffexp.xls".format(outdir=outdir,gan=gan,gbn=gbn),'w')
 		fh_diffexpfilter = open("{outdir}/{gan}-vs-{gbn}_DESeq2.diffexpfilter.xls".format(outdir=outdir,gan=gan,gbn=gbn),'w')
 		diff_header = "miRNA id\tExpression({gan})\tExpression({gbn})\tlog2FoldChange({gbn}/{gan})\tPvalue\tPadj\tUp/Down-Regulation\n".format(gan=gan,gbn=gbn)
