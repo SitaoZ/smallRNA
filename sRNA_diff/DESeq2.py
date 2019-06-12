@@ -197,11 +197,12 @@ write.table(sizefactor, file=\"{outdir}/tmp.output_b\", quote=FALSE, sep=\"\\t\"
 				for line in F.readlines():
 					a = line.strip().split()
 					control_mean, treat_mean = 0,0
-					ratio = 2 ** float(a[2])  # transformat log2 to fold change
-					sum = 2 * float(a[1])
-					control_mean = sum/(ratio+1)
+					ratio = 2 ** float(a[2])  # transformat log2FlodChange to FoldChange
+					sum = 2 * float(a[1])     # a[1] is baseMean,The base mean is the mean of normalized counts of all samples, normalizing for sequencing depth. It does not take into account gene length.
+					control_mean = sum/(ratio+1) 
 					treat_mean = (sum*ratio)/(ratio+1)
 					up_down = 'Up' if float(a[2]) > 0 else 'Down'
+					#geneID controlMean treatMean log2FoldChange pvalue padj up/down
 					print_out = '\t'.join(map(str,[a[0],control_mean,treat_mean,a[2],a[5],a[6],up_down]))
 					fh_diffexp.write(print_out+"\n")
 					if abs(float(a[2])) >= log2 and float(a[6]) <= padj:
