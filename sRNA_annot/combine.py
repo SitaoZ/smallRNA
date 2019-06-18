@@ -34,7 +34,7 @@ def main():
 
 def combine_unkonwn(predict_dir,samples):
 	"""
-	combine all sample unknown read which map multiply(10 locites) to genome
+	combine all sample unknown read which map multiply(10 locites) to genome according to seequnce
 	unknown.fa source from catalog.py(mapping to genome.fa with 10bp and not annotated by ncrna database)
 	>tagid_count_chromosome position strand    example: tag1_61301_Pn7 19068351        -
 	:param predict_dir: predict outdir
@@ -47,34 +47,34 @@ def combine_unkonwn(predict_dir,samples):
 	key = []
 	## in
 	for prefix in samples.split(','):
-		base = os.path.basename(prefix)
-		key.append(base)
+		sample = os.path.basename(prefix)
+		key.append(sample)
 		fasta_obj = Fasta(prefix+'.unknown.fa')
 		for record in fasta_obj:
 			name = record.id
 			seq = record.seq
-			hd = name.split('_') # name formt #>tagid_count_chromosome position strand
+			hd = name.split('_') # name formt #>tagid_count_chromosome position strand . count is read mapping position count
 			chr_start_strand = hd[2].split('\t')
-			end = len(seq) + int(chr_start_strand[1]) - 1
+			end = int(chr_start_strand[1]) + len(seq) - 1
 			chr_start_strand.insert(2,str(end)) # add end
 			dat[seq]['map'] = "\t".join(chr_start_strand)
-			dat[seq][base] = int(hd[1]) # count
+			dat[seq][sample] = int(hd[1]) # count
 
 	## out
 	OF = open(predict_dir+"/unknown.fa",'w')  # Take the intersection of multiple samples
 	OD = open(predict_dir+"/unknown.xls",'w') # print alignment information for each unknown tag
 	OD.writelines("Tag\tChr\tStart\tEnd\tStrand\t"+"\t".join(key)+"\tSequence\n") # key 顺序固定
 	flag = 1
-	for sq in dat.keys():
+	for seq in dat.keys():
 		count = 0
-		OD.writelines("tag{flag}\t{map}".format(flag=flag,map=dat[sq]['map'])) #tag chr start end strand
-		for k in key:
-			if not dat[sq].get(k):
-				dat[sq][k] = 0
-			count += dat[sq][k] # 每一个序列特定下，把所有的个体的该序列的条数累加
-			OD.writelines("\t"+str(dat[sq][k])) # write count of every sample
-		OD.writelines("\t"+sq+"\n") # sequence
-		OF.writelines(">tag{flag}_{count}\n{seq}\n".format(flag=flag,count=count,seq=sq)) # fasta
+		OD.writelines("tag{flag}\t{map}".format(flag=flag,map=dat[seq]['map'])) #tag chr start end strand
+		for sample in key:
+			if not dat[seq].get(sample):
+				dat[seq][sample] = 0
+			count += dat[seq][sample] # 每一个序列特定下，把所有的个体的该序列的条数累加
+			OD.writelines("\t"+str(dat[seq][sample])) # write count of every sample
+		OD.writelines("\t"+seq+"\n") # sequence
+		OF.writelines(">tag{flag}_{count}\n{seq}\n".format(flag=flag,count=count,seq=seq)) # fasta
 		flag += 1
 	OF.close()
 	OD.close()
