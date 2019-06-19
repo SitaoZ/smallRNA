@@ -1,7 +1,7 @@
 #-*-coding:utf-8-*-
 #!/usr/bin/python
 
-import os,sys
+import os,re,sys
 import subprocess
 from optparse import OptionParser
 from util.fasta import Fasta
@@ -16,10 +16,10 @@ def main():
 	:return:
 	"""
 	parser = OptionParser()
-	parser.add_option('-k','--purpose',help="purpose, 0:unknown 1:express 2:express_aasra")
-	parser.add_option('-f','--sample',help="prefix of each sample annotation,separated bu comma")
-	parser.add_option('-p','--predict',help="prediction outdir")
-	parser.add_option('-d','--dir',help="expression outdir for degs")
+	parser.add_option('-k','--purpose',type='int',help="purpose, 0:unknown 1:express 2:express_aasra")
+	parser.add_option('-f','--sample',type='string',help="prefix of each sample annotation,separated bu comma")
+	parser.add_option('-p','--predict',type='string',help="prediction outdir")
+	parser.add_option('-d','--dir',type='string',help="expression outdir for degs")
 
 	opts,args = parser.parse_args()
 	if opts.purpose == None or opts.sample == None or opts.predict ==None :
@@ -28,7 +28,12 @@ def main():
 	purpose = opts.purpose
 	samples = opts.sample
 	predict_dir = opts.predict
-	combine_unkonwn(predict_dir,samples)
+	express_dir = opts.dir
+	if purpose == 0:
+		combine_unkonwn(predict_dir,samples)
+	if purpose == 1:
+		print(type(purpose))
+		combine_express(predict_dir,samples,express_dir)
 
 
 
@@ -79,59 +84,100 @@ def combine_unkonwn(predict_dir,samples):
 	OF.close()
 	OD.close()
 
-def predict_sRNA(file_handle,exp,tag,key,typ):
-	pass
+def predicted_sRNA(file_handle,exp,tag,key,typ):
+	"""
+	Add predict sRNA information to sRNA which had been annotated by database
+	:param file_handle: predict miRNA or piRNA or siRNA file
+	:param exp: a dict data from combine_express
+	:param tag: a dixt data from combine_express
+	:param key: a list data from combine_express
+	:param typ: a string from combine_express
+	:return: modified exp tag key typ
+	"""
+	with open(file_handle,'r') as F:
+		for line in F.readlines():
+			line = line.strip()
+			if re.search('Tag info',line):continue
+			a = line.split('\t')
+			if typ == 'miRNA':
+				des = a[1]+":"+":"+a[2]+":"+a[5]+"_"+a[6]
+			if typ == 'piRNA':
+				des = a[1]+"_"+a[2]+":"+a[3]+":"+a[4]+"_"+a[5]
+			ttag = []
+			for t in a[-1].split(','):
+				t = re.sub('\_.*','',t)
+				if t not in tag:continue
+				ttag.append(t)
+			if len(ttag) == 0 :continue
+			i = 0
+			while(i < len(key)):
+				c = 0
+				for b in ttag:
+					c += tag[b][i]
+				if c == 0 : continue
+				exp[key[i][1]].append("{0}\t{1}\t{2}\t{3}".format(a[0],str(c),typ,des))
+				exp[key[i][2]] += c
+			for i in ttag:
+				del tag[i]
+
+
+
 
 def combine_express(predict_dir,samples,express_dir):
 	"""
 	combine known and unknown expression file
 	:param predict_dir: predict unknown out dir
-	:param samples: samples prefix partition comma
-	:param express_dir: expression output dir
+	:param samples: samples prefix partition comma,string
+	:param express_dir: expression output dir,string
 	:return:none
 	"""
 	tag = {}
 	keys = []
 	exp = defaultdict(dict)
+	if not os.path.exists(express_dir):os.mkdir(express_dir)
 	if os.path.exists(predict_dir+"/unknown.xls"):
 		with open(predict_dir+"/unknown.xls",'r') as F:
 			for line in F.readlines():
 				a = line.strip().split()
 				if a[0] == 'Tag':
-					key = a[5:]
+					keys = a[5:]
 				else:
 					tag[a[0]] = a[5:]
 
 	if os.path.exists(predict_dir+"/miRNA/predicted_miRNA.xls"):
-		predicted_sRNA(predict_dir+"/miRNA/predicted_miRNA.xls",exp,tag,key,'miRNA')
+		predicted_sRNA(predict_dir+"/miRNA/predicted_miRNA.xls",exp,tag,keys,'miRNA')
 	if os.path.exists(predict_dir + "/miRNA/predicted_piRNA.xls"):
-		predicted_sRNA(predict_dir + "/miRNA/predicted_piRNA.xls", exp, tag, key, 'piRNA')
+		predicted_sRNA(predict_dir + "/miRNA/predicted_piRNA.xls", exp, tag, keys, 'piRNA')
 	if os.path.exists(predict_dir + "/miRNA/predicted_siRNA.xls"):
-		predicted_sRNA(predict_dir + "/miRNA/predicted_siRNA.xls", exp, tag, key, 'siRNA')
-	flag= defaultdict(dict)
+		predicted_sRNA(predict_dir + "/miRNA/predicted_siRNA.xls", exp, tag, keys, 'siRNA')
+	flag= defaultdict(int)
 	for prefix in samples.split(','):
 		base = os.path.basename(prefix)
+		exp[base][1] = []
+		exp[base][2] = 0
 		with open(prefix+".catalog.xls",'r') as F:
 			for line in F.readlines():
-				a = line.strip().split()
-				if a[0] == 'sRNA id' or a[0] == 'unmap':
-					exp[key][1] += line #save all samples expression
-					exp[key][2] += float(a[1])
+				line = line.strip()
+				a = line.split('\t')
+				if a[0] == 'sRNA id' or a[0] == 'unmap':continue
+				exp[base][1].append(line) #save all samples expression
+				exp[base][2] += float(a[1])
 		fh = {}
 		for i in ['miRNA','piRNA','siRNA']:
-			subprocess.check_call('mkdir -p {a}/expr_{b}'.format(a=express_dir,b=i))
-			fh[i] = open("{1}/expr_{2}/{3}.expr.xls")
-			fh[i].writelines("sRNA id\tCount({count})\tType\tDescription\tTPM\n".format(count=exp[key][2]))
-		OT =  open("{prefix}.expr.xls".format(prefix=prefix))
-		OT.writelines("sRNA id\tCount({count})\tType\tDescription\tTPM\n".format(count=exp[key][2]))
-		for inf in exp[key][1].split("\n"):
-			info = inf.split('\t')
+			os.makedirs('{0}/expr_{1}'.format(express_dir,i),mode=0o777,exist_ok=True)
+			fh[i] = open("{0}/expr_{1}/{2}.expr2.xls".format(express_dir,i,base),'w')
+			fh[i].writelines("sRNA id\tCount({count})\tType\tDescription\tTPM\n".format(count=exp[base][2]))
+		OT =  open("{prefix}.expr2.xls".format(prefix=prefix),'w')
+		OT.writelines("sRNA id\tCount({count})\tType\tDescription\tTPM\n".format(count=exp[base][2]))
+		for inf in exp[base][1]:
+			info = inf.split()
 			if info[2] == 'mature':
 				info[2] = 'miRNA'
+			tpm = str(float(info[1]) / exp[base][2])
 			if fh.get(info[2]):
 				flag[info[2]] += 1
-			fh[i].writelines("%s\t%.2f\n"%(inf,float(info[1])/exp[key][2]))
-		OT.writelines("%s\t%.2f\n"%(inf,float(info[1])/exp[key][2]))
+				fh[info[2]].writelines("%s\t%s\n"%(inf,tpm)) # smallRNA TPM = count/total
+			OT.writelines("%s\t%s\n"%(inf,tpm))
 		OT.close()
 		for key in fh.keys():
 			fh[key].close()
