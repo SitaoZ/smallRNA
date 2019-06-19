@@ -84,7 +84,7 @@ def combine_unkonwn(predict_dir,samples):
 	OF.close()
 	OD.close()
 
-def predicted_sRNA(file_handle,exp,tag,key,typ):
+def predicted_sRNA(file_handle,exp,tag,keys,typ):
 	"""
 	Add predict sRNA information to sRNA which had been annotated by database
 	:param file_handle: predict miRNA or piRNA or siRNA file
@@ -94,6 +94,7 @@ def predicted_sRNA(file_handle,exp,tag,key,typ):
 	:param typ: a string from combine_express
 	:return: modified exp tag key typ
 	"""
+
 	with open(file_handle,'r') as F:
 		for line in F.readlines():
 			line = line.strip()
@@ -107,16 +108,19 @@ def predicted_sRNA(file_handle,exp,tag,key,typ):
 			for t in a[-1].split(','):
 				t = re.sub('\_.*','',t)
 				if t not in tag:continue
-				ttag.append(t)
+				ttag.append(t) #ttag contains tag info
 			if len(ttag) == 0 :continue
 			i = 0
-			while(i < len(key)):
+			while(i < len(keys)-1):
+				exp[keys[i]][1] = []
+				exp[keys[i]][2] = 0
 				c = 0
 				for b in ttag:
-					c += tag[b][i]
+					c += float(tag[b][i])
 				if c == 0 : continue
-				exp[key[i][1]].append("{0}\t{1}\t{2}\t{3}".format(a[0],str(c),typ,des))
-				exp[key[i][2]] += c
+				exp[keys[i]][1].append("{0}\t{1}\t{2}\t{3}".format(a[0],str(c),typ,des)) # add novel information
+				exp[keys[i]][2] += c   # add novel count to the sample
+				i+=1
 			for i in ttag:
 				del tag[i]
 
@@ -142,7 +146,7 @@ def combine_express(predict_dir,samples,express_dir):
 				if a[0] == 'Tag':
 					keys = a[5:]
 				else:
-					tag[a[0]] = a[5:]
+					tag[a[0]] = a[5:] # tag info
 
 	if os.path.exists(predict_dir+"/miRNA/predicted_miRNA.xls"):
 		predicted_sRNA(predict_dir+"/miRNA/predicted_miRNA.xls",exp,tag,keys,'miRNA')
@@ -155,6 +159,7 @@ def combine_express(predict_dir,samples,express_dir):
 		base = os.path.basename(prefix)
 		exp[base][1] = []
 		exp[base][2] = 0
+		# read catalog.xls info
 		with open(prefix+".catalog.xls",'r') as F:
 			for line in F.readlines():
 				line = line.strip()
@@ -163,6 +168,7 @@ def combine_express(predict_dir,samples,express_dir):
 				exp[base][1].append(line) #save all samples expression
 				exp[base][2] += float(a[1])
 		fh = {}
+		# Summarize the annotated expression quantity information to prepare for differential expression analysis
 		for i in ['miRNA','piRNA','siRNA']:
 			os.makedirs('{0}/expr_{1}'.format(express_dir,i),mode=0o777,exist_ok=True)
 			fh[i] = open("{0}/expr_{1}/{2}.expr2.xls".format(express_dir,i,base),'w')
